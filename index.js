@@ -179,7 +179,8 @@ const main = async () => {
         if (auction.closed) throw "auction_closed";
         if (
           amount < auction.minPrice ||
-          amount < currentPrices[req.auctionId]
+          amount < currentPrices[req.auctionId] ||
+          amount === currentPrices[req.auctionId]
         ) {
           throw "the bid is too low";
         }
