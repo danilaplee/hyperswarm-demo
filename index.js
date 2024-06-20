@@ -25,6 +25,7 @@ const main = async () => {
     dhtSeed = crypto.randomBytes(32);
     await hbee.put("dht-seed", dhtSeed);
   }
+  //TO-DO REPLICATE THIS ON CLIENT FOR ABSOLUTE PEER2PEER
   const auctionDB = hbee.sub("auctions");
   const subscribers = hbee.sub("subscribers");
   const bidsDBs = {};
