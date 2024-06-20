@@ -42,11 +42,17 @@ const main = async () => {
   await client.request(AuctionCommands.sub, Buffer.from(rpcServer.publicKey.toString('hex'), "utf-8"))
   rpcServer.respond("event", (data)=>{
     try {
-      // console.info("event", data.toString('utf-8'))
-      setTimeout(drawAuctionTable, 300)
+      const e = JSON.parse(data.toString('utf-8'))
+      // console.info("event", e)
+      const winner = e.winnerName === userName ? "YOU" : e.winnerName 
+      if(e.winnerName)
+        setTimeout(()=>{
+          console.info(`CONGRATS! ${winner} WON AUCTION ${e.auction?.name} with your bid of ${e.winnerPrice}`)
+        }, 500)
     } catch(err) {
-      console.error("parse event error", err.message)
+      // console.error("parse event error", err.message)
     }
+    setTimeout(drawAuctionTable, 300)
   })
   return {
     async create(name, minPrice) {
@@ -153,11 +159,12 @@ const drawAuctionTable = async () => {
   try {
     const api = await apiPromise
     const auctionData = await api.getAuctionData()
-    const auctionMap = auctionData?.map(a=>(a.name ? [a.name, a.id, a.currentPrice || a.minPrice] : undefined)).filter(i=>i).sort((a,b)=>a.name-b.name)
+    console.info('')
+    const auctionMap = auctionData?.map(a=>(a.name ? [a.name, a.id, a.currentPrice || a.minPrice, a.closed] : undefined)).filter(i=>i).sort((a,b)=>a.name-b.name)
     // console.info('auctions', auctionData, auctionMap)
     const table = new Table({
-      head: ['Auction Name', 'Auction Id', "Price"],
-      colWidths: [30, 40, 10],
+      head: ['Auction Name', 'Auction Id', "Price", "Finished"],
+      colWidths: [30, 40, 20],
       
       // rows
     });

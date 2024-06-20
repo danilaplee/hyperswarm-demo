@@ -28,9 +28,34 @@ const main = async () => {
   const subKeys = []
   const auctions = []
   const indexedAuction = {}
+  const currentPrices = {}
+  const currentPriceNames = {}
   const auctionsHistoryStream = auctionDB.createHistoryStream()
   const auctionsLiveStream = auctionDB.createReadStream()
   const subscribersHistoryStream = subscribers.createHistoryStream()
+  
+  const processHistoryBid = (data) => {
+    try {
+      
+      if(data.value) {
+        const item = JSON.parse(data.value.toString('utf-8'))
+        const amount = parseInt(item.amount, 10)
+        if(!currentPrices[item.auctionId] || amount > currentPrices[item.auctionId]) {
+          currentPrices[item.auctionId] = amount
+          currentPriceNames[item.auctionId] = item.userName
+        }
+      }
+      // console.info("currentPrices", currentPrices)
+    } catch(err) {
+      // console.error('prcess bid err', err)
+    }
+  }
+
+  const processBidBD = (bidBD) => {
+    const bidsHistoryStream = bidBD.createHistoryStream()
+    bidsHistoryStream.addListener("data", processHistoryBid)
+  }
+
   const processAuctionStream = (data)=>{
     try {
       if(data.value) {
@@ -40,6 +65,13 @@ const main = async () => {
           indexedAuction[item.id] = true
           auctions.push(item) 
           bidsDBs[data.key] = hbee.sub(getBidTopicSubId(data.key))
+          processBidBD(bidsDBs[data.key])
+        }
+        if(item.closed && indexedAuction[item.id]) {
+          auctions.find(i=>{
+            if(i.id === item.id)
+              i.closed = true
+          })
         }
       }
     } catch(err) {
@@ -134,12 +166,16 @@ const main = async () => {
       const id = crypto.randomUUID()
 
       if(req.amount && req.auctionId) {
+        const amount = parseInt(req.amount, 10)
         const auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
-        
         if(auction.closed)
           throw "auction_closed"
-
+        if(amount < auction.minPrice || amount < currentPrices[req.auctionId]) {
+          throw "the bid is too low"
+        }
         await bidsDBs[req.auctionId].put(id, reqRaw)
+        currentPrices[req.auctionId] = req.amount
+        currentPriceNames[req.auctionId] = req.userName
       }
       else 
         throw "invalid_params"
@@ -163,9 +199,9 @@ const main = async () => {
     try {
       const req = JSON.parse(reqRaw.toString('utf-8'))
       console.info('close auction', req)
-      
+      let auction;
       if(req.auctionId) {
-        const auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
+        auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
         
         if(auction.closed)
           throw "auction_closed"
@@ -177,12 +213,16 @@ const main = async () => {
       else 
         throw "invalid_params"
 
-      const resp = { success:true }
+      const resp = { success:true, winnerName: currentPriceNames[req.auctionId], winnerPrice: currentPrices[req.auctionId], req, auction }
   
+      auctions.find(i=>{
+        if(i.id === req.auctionId)
+          i.closed = true
+      })
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), 'utf-8')
 
-      updateSubs(reqRaw)
+      updateSubs(respRaw)
       return respRaw
     } catch(err) {
       console.error("finalize auction error", err)
@@ -201,7 +241,9 @@ const main = async () => {
       return respRaw
     }
   })
-  rpcServer.respond(AuctionCommands.getAuctioData, async ()=>Buffer.from(JSON.stringify(auctions), "utf-8"))
+  rpcServer.respond(AuctionCommands.getAuctioData, async ()=>Buffer.from(
+    JSON.stringify(auctions.map(i=>({...i,currentPrice:currentPrices[i.id]})))
+  , "utf-8"))
 }
 
 main().catch(console.error)
