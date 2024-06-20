@@ -7,4 +7,8 @@
 - paste serverPubKey to client.js
 - open second terminal
 - npm run client
+- run some commands
+- enjoy
 - see todo in index.js line 209
+
+![screenshot](screenshot.png)

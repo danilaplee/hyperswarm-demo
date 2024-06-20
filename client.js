@@ -10,7 +10,7 @@ const { AuctionCommands } = require('./constants')
 
 const userNameDbKey = 'userName1'
 // public key of rpc server, used instead of address, the address is discovered via dht
-const serverPubKey = Buffer.from('f6a768a831651da2abd79c74b523deb3d8215ea301119eb5a34cbf8b47142979', 'hex')
+const serverPubKey = Buffer.from('1bfbc81ce01bc3ee5e19f8d8014f46b257d0deef59300df37c43391fde003930', 'hex')
 
 const main = async () => {
   // hyperbee db
