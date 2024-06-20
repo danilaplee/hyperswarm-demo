@@ -5,10 +5,11 @@ const DHT = require('hyperdht')
 const Hypercore = require('hypercore')
 const Hyperbee = require('hyperbee')
 const crypto = require('crypto')
+const Table = require('cli-table3');
 const { AuctionCommands } = require('./constants')
 
 // public key of rpc server, used instead of address, the address is discovered via dht
-const serverPubKey = Buffer.from('142f2af9de93cb1f850f8c1959efb5b73cab4ca08d2e61d2508e306a387d08c2', 'hex')
+const serverPubKey = Buffer.from('f6a768a831651da2abd79c74b523deb3d8215ea301119eb5a34cbf8b47142979', 'hex')
 
 const main = async () => {
   // hyperbee db
@@ -41,9 +42,10 @@ const main = async () => {
   await client.request(AuctionCommands.sub, Buffer.from(rpcServer.publicKey.toString('hex'), "utf-8"))
   rpcServer.respond("event", (data)=>{
     try {
-      console.info("event", data.toString('utf-8'))
+      // console.info("event", data.toString('utf-8'))
+      setTimeout(drawAuctionTable, 300)
     } catch(err) {
-      console.info("parse event error", err.message)
+      console.error("parse event error", err.message)
     }
   })
   return {
@@ -55,6 +57,9 @@ const main = async () => {
       const respRaw = await client.request(AuctionCommands.createAuction, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
       console.info(resp)
+      if(resp?.error) {
+        console.error(resp?.error)
+      }
       return resp
     },
     async close(auctionId) {
@@ -64,7 +69,9 @@ const main = async () => {
     
       const respRaw = await client.request(AuctionCommands.finalizeAuction, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
-      console.info(resp)
+      if(resp?.error) {
+        console.error(resp?.error)
+      }
       return resp
     },
     async bid(auctionId, amount) {
@@ -74,8 +81,15 @@ const main = async () => {
     
       const respRaw = await client.request(AuctionCommands.createBid, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
-      console.info(resp)
+      if(resp?.error) {
+        console.error(resp?.error)
+      }
       return resp
+    },
+    async getAuctionData() {
+      const respRaw = await client.request(AuctionCommands.getAuctioData)
+      return JSON.parse(respRaw.toString('utf-8'))
+
     },
     hbee
   }
@@ -134,9 +148,30 @@ const execCommand = async (answer) => {
     api[name](...args)
   }
 }
+
+const drawAuctionTable = async () => {
+  try {
+    const api = await apiPromise
+    const auctionData = await api.getAuctionData()
+    const auctionMap = auctionData?.map(a=>(a.name ? [a.name, a.id, a.currentPrice || a.minPrice] : undefined)).filter(i=>i).sort((a,b)=>a.name-b.name)
+    // console.info('auctions', auctionData, auctionMap)
+    const table = new Table({
+      head: ['Auction Name', 'Auction Id', "Price"],
+      colWidths: [30, 40, 10],
+      
+      // rows
+    });
+    auctionMap.forEach(i=>table.push(i))
+
+    console.log(table.toString());
+  } catch(err) {
+    console.error('drawTable error', err?.message || err)
+  }
+}
 const initClient = async () => {
   try {
     const api = await apiPromise
+    drawAuctionTable()
     userName = (await api.hbee.get(userNameDbKey))?.value?.toString('utf-8')
     if(userName && userName !== "") {
       return initCmd()

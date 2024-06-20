@@ -23,22 +23,31 @@ const main = async () => {
     await hbee.put('dht-seed', dhtSeed)
   }
   const auctionDB = hbee.sub("auctions")
-  const subscribers = hbee.sub("subscribers2")
+  const subscribers = hbee.sub("subscribers")
   const bidsDBs = {}
   const subKeys = []
+  const auctions = []
+  const indexedAuction = {}
   const auctionsHistoryStream = auctionDB.createHistoryStream()
+  const auctionsLiveStream = auctionDB.createReadStream()
   const subscribersHistoryStream = subscribers.createHistoryStream()
-  auctionsHistoryStream.addListener("data", (data)=>{
+  const processAuctionStream = (data)=>{
     try {
       if(data.value) {
         const item = JSON.parse(data.value.toString('utf-8'))
-        if(!item.closed)
+        item.id = data.key
+        if(!item.closed && item.name && !indexedAuction[item.id]) {
+          indexedAuction[item.id] = true
+          auctions.push(item) 
           bidsDBs[data.key] = hbee.sub(getBidTopicSubId(data.key))
+        }
       }
     } catch(err) {
-      console.error("parse history error", err)
+      // console.error("parse history error", err)
     }
-  })
+  }
+  auctionsHistoryStream.addListener("data", processAuctionStream)
+  auctionsLiveStream.addListener("data", processAuctionStream)
   subscribersHistoryStream.addListener("data", (data)=>{
     try {
       if(data.value) {
@@ -46,7 +55,7 @@ const main = async () => {
         subKeys.push(item)
       }
     } catch(err) {
-      console.error("parse subs error", err)
+      // console.error("parse subs error", err)
     }
   })
 
@@ -79,11 +88,11 @@ const main = async () => {
           const buff = Buffer.from(subKey, 'hex')
           rpc.event(buff,"event", update)
         } catch(err) {
-          console.error('update sub err', err)
+          // console.error('update sub err', err)
         }
       })
     } catch(err) {
-      console.error('update subs error', err)
+      // console.error('update subs error', err)
     }
   }
 
@@ -104,6 +113,7 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), 'utf-8')
       bidsDBs[id] = hbee.sub(getBidTopicSubId(id))
+      auctions.push({...req, id}) 
       
       updateSubs(reqRaw)
 
@@ -191,6 +201,7 @@ const main = async () => {
       return respRaw
     }
   })
+  rpcServer.respond(AuctionCommands.getAuctioData, async ()=>Buffer.from(JSON.stringify(auctions), "utf-8"))
 }
 
 main().catch(console.error)
