@@ -57,7 +57,24 @@ const main = async () => {
     setTimeout(drawAuctionTable, 300)
   })
   return {
-    async create(name, minPrice) {
+    async create(...args) {
+      let name = [args[0]]
+      let minPrice = args[1]
+      let argIndex = 1
+      while(isNaN(parseFloat(minPrice)) && argIndex < args.length) {
+        name.push(minPrice)
+        minPrice = args[argIndex++]
+      }
+      name = name.join(" ")
+      console.info('name', name)
+      if(!name || typeof name !== "string" || name === "") {
+        console.error("invalid name")
+        return 
+      }
+      if(isNaN(parseFloat(minPrice))) {
+        console.error("invalid minimum price")
+        return
+      }
       // payload for request
       const payload = { name, minPrice, userName, eventName:AuctionCommands.createAuction }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')
@@ -71,6 +88,10 @@ const main = async () => {
       return resp
     },
     async close(auctionId) {
+      if(!auctionId || typeof auctionId !== "string" || auctionId === "") {
+        console.error("invalid auctionId")
+        return 
+      }
       // payload for request
       const payload = { auctionId, userName, eventName:AuctionCommands.finalizeAuction }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')
@@ -83,6 +104,14 @@ const main = async () => {
       return resp
     },
     async bid(auctionId, amount) {
+      if(!auctionId || typeof auctionId !== "string" || auctionId === "") {
+        console.error("invalid auctionId")
+        return 
+      }
+      if(isNaN(parseFloat(amount))) {
+        console.error("invalid value")
+        return
+      }
       // payload for request
       const payload = { auctionId, amount, userName, eventName:AuctionCommands.createBid }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')

@@ -39,7 +39,7 @@ const main = async () => {
       
       if(data.value) {
         const item = JSON.parse(data.value.toString('utf-8'))
-        const amount = parseInt(item.amount, 10)
+        const amount = parseFloat(item.amount)
         if(!currentPrices[item.auctionId] || amount > currentPrices[item.auctionId]) {
           currentPrices[item.auctionId] = amount
           currentPriceNames[item.auctionId] = item.userName
@@ -166,7 +166,7 @@ const main = async () => {
       const id = crypto.randomUUID()
 
       if(req.amount && req.auctionId) {
-        const amount = parseInt(req.amount, 10)
+        const amount = parseFloat(req.amount)
         const auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
         if(auction.closed)
           throw "auction_closed"
