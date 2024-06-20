@@ -62,11 +62,11 @@ const main = async () => {
       let minPrice = args[1]
       let argIndex = 1
       while(isNaN(parseFloat(minPrice)) && argIndex < args.length) {
-        name.push(minPrice)
+        name.push(args[argIndex])
         minPrice = args[argIndex++]
       }
-      name = name.join(" ")
-      console.info('name', name)
+      name = name.join(" ").replace(minPrice, "")
+      // console.info('name', name)
       if(!name || typeof name !== "string" || name === "") {
         console.error("invalid name")
         return 
