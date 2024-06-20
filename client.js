@@ -43,12 +43,13 @@ const main = async () => {
   await client.request(AuctionCommands.sub, Buffer.from(rpcServer.publicKey.toString('hex'), "utf-8"))
   rpcServer.respond("event", (data)=>{
     try {
+      console.info("updating the auctions")
       const e = JSON.parse(data.toString('utf-8'))
       // console.info("event", e)
       const winner = e.winnerName === userName ? "YOU" : e.winnerName 
       if(e.winnerName)
         setTimeout(()=>{
-          console.info(`CONGRATS! ${winner} WON AUCTION ${e.auction?.name} with your bid of ${e.winnerPrice}`)
+          console.info(`CONGRATS! ${winner} WON AUCTION ${e.auction?.name} WITH BID OF ${e.winnerPrice}`)
         }, 500)
     } catch(err) {
       // console.error("parse event error", err.message)
