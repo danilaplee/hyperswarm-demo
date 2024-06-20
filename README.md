@@ -10,4 +10,4 @@
 - run some commands
 - enjoy
 - see todo in index.js line 209
-![screenshot](screenshot.png)
+  ![screenshot](screenshot.png)
