@@ -8,6 +8,7 @@ const crypto = require('crypto')
 const Table = require('cli-table3');
 const { AuctionCommands } = require('./constants')
 
+const userNameDbKey = 'userName1'
 // public key of rpc server, used instead of address, the address is discovered via dht
 const serverPubKey = Buffer.from('f6a768a831651da2abd79c74b523deb3d8215ea301119eb5a34cbf8b47142979', 'hex')
 
@@ -121,7 +122,6 @@ bid {auctionId} {value}
 close {auctionId} 
 `
 let userName = ""
-const userNameDbKey = 'userName1'
 const getName = async () => {
   const api = await apiPromise
 
@@ -183,10 +183,10 @@ const initClient = async () => {
     if(userName && userName !== "") {
       return initCmd()
     }
-    return getName()
+    return setTimeout(getName, 300)
   } catch(err) {
     console.error('getName error', err)
-    return getName()
+    return setTimeout(getName, 300)
   }
   
 }

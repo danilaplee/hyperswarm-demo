@@ -200,8 +200,14 @@ const main = async () => {
       const req = JSON.parse(reqRaw.toString('utf-8'))
       console.info('close auction', req)
       let auction;
+      
       if(req.auctionId) {
         auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
+      
+        //TO-DO VALIDATE HERE WITH PUB-PRIV-KEY SIGNATURE 
+        //AND NOT WITH USERNAME
+        if(req.userName !== auction.userName) 
+          throw "only_owner_can_finalize"
         
         if(auction.closed)
           throw "auction_closed"

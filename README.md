@@ -7,3 +7,4 @@
 - paste serverPubKey to client.js
 - open second terminal
 - npm run client
+- see todo in index.js line 209
