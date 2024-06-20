@@ -23,18 +23,30 @@ const main = async () => {
     await hbee.put('dht-seed', dhtSeed)
   }
   const auctionDB = hbee.sub("auctions")
+  const subscribers = hbee.sub("subscribers2")
   const bidsDBs = {}
-  const auctionsReadStream = auctionDB.createHistoryStream()
-  auctionsReadStream.addListener("data", (data)=>{
+  const subKeys = []
+  const auctionsHistoryStream = auctionDB.createHistoryStream()
+  const subscribersHistoryStream = subscribers.createHistoryStream()
+  auctionsHistoryStream.addListener("data", (data)=>{
     try {
-      console.info("old auction", data.key)
       if(data.value) {
         const item = JSON.parse(data.value.toString('utf-8'))
-        console.info("old auction", item)
-        bidsDBs[data.key] = hbee.sub(getBidTopicSubId(data.key))
+        if(!item.closed)
+          bidsDBs[data.key] = hbee.sub(getBidTopicSubId(data.key))
       }
     } catch(err) {
       console.error("parse history error", err)
+    }
+  })
+  subscribersHistoryStream.addListener("data", (data)=>{
+    try {
+      if(data.value) {
+        const item = data.value
+        subKeys.push(item)
+      }
+    } catch(err) {
+      console.error("parse subs error", err)
     }
   })
 
@@ -60,16 +72,27 @@ const main = async () => {
   console.log('rpc server started listening on public key:', rpcServer.publicKey.toString('hex'))
   // rpc server started listening on public key: 763cdd329d29dc35326865c4fa9bd33a45fdc2d8d2564b11978ca0d022a44a19
 
-
-  const actionWrapper = (actionCB) => {
-
+  const updateSubs = (update) => {
+    try {
+      subKeys.map((subKey)=>{
+        try {
+          const buff = Buffer.from(subKey, 'hex')
+          rpc.event(buff,"event", update)
+        } catch(err) {
+          console.error('update sub err', err)
+        }
+      })
+    } catch(err) {
+      console.error('update subs error', err)
+    }
   }
+
   rpcServer.respond(AuctionCommands.createAuction, async (reqRaw) => {
 
-    const req = JSON.parse(reqRaw.toString('utf-8'))
-    console.info('new auction', req)
-    const id = crypto.randomUUID()
     try {
+      const req = JSON.parse(reqRaw.toString('utf-8'))
+      console.info('new auction', req)
+      const id = crypto.randomUUID()
       
       if(req.name)
         await auctionDB.put(id, reqRaw)
@@ -81,21 +104,25 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), 'utf-8')
       bidsDBs[id] = hbee.sub(getBidTopicSubId(id))
+      
+      updateSubs(reqRaw)
+
       return respRaw
     } catch(err) {
       console.error("write auction error", err)
-      const respRaw = Buffer.from(JSON.stringify({error:err || err.message}), 'utf-8')
+      const respRaw = Buffer.from(JSON.stringify({error:err?.message || err}), 'utf-8')
       return respRaw
     }
   })
 
   rpcServer.respond(AuctionCommands.createBid, async (reqRaw) => {
 
-    const req = JSON.parse(reqRaw.toString('utf-8'))
-    console.info('new bid', req)
-    const id = crypto.randomUUID()
     try {
-      
+
+      const req = JSON.parse(reqRaw.toString('utf-8'))
+      console.info('new bid', req)
+      const id = crypto.randomUUID()
+
       if(req.amount && req.auctionId) {
         const auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
         
@@ -112,19 +139,20 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), 'utf-8')
 
+      updateSubs(reqRaw)
       return respRaw
     } catch(err) {
       console.error("write bid error", err)
-      const respRaw = Buffer.from(JSON.stringify({error:err || err.message}), 'utf-8')
+      const respRaw = Buffer.from(JSON.stringify({error:err?.message || err}), 'utf-8')
       return respRaw
     }
   })
 
   rpcServer.respond(AuctionCommands.finalizeAuction, async (reqRaw) => {
 
-    const req = JSON.parse(reqRaw.toString('utf-8'))
-    console.info('close auction', req)
     try {
+      const req = JSON.parse(reqRaw.toString('utf-8'))
+      console.info('close auction', req)
       
       if(req.auctionId) {
         const auction = JSON.parse((await auctionDB.get(req.auctionId))?.value?.toString('utf-8'))
@@ -144,10 +172,22 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), 'utf-8')
 
+      updateSubs(reqRaw)
       return respRaw
     } catch(err) {
       console.error("finalize auction error", err)
-      const respRaw = Buffer.from(JSON.stringify({error:err || err.message}), 'utf-8')
+      const respRaw = Buffer.from(JSON.stringify({error:err?.message || err}), 'utf-8')
+      return respRaw
+    }
+  })
+  rpcServer.respond(AuctionCommands.sub, async (reqRaw) => {
+    try {
+      console.info('new sub', reqRaw.toString('utf-8'))
+      subKeys.push(reqRaw.toString('utf-8'))
+      subscribers.put(crypto.randomUUID(), reqRaw)
+    } catch(err) {
+      console.error("finalize auction error", err)
+      const respRaw = Buffer.from(JSON.stringify({error:err?.message || err}), 'utf-8')
       return respRaw
     }
   })

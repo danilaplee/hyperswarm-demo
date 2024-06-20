@@ -35,33 +35,44 @@ const main = async () => {
   // rpc lib
   const rpc = new RPC({ dht })
 
+  const client = rpc.connect(serverPubKey)
+  const rpcServer = rpc.createServer()
+  await rpcServer.listen()
+  await client.request(AuctionCommands.sub, Buffer.from(rpcServer.publicKey.toString('hex'), "utf-8"))
+  rpcServer.respond("event", (data)=>{
+    try {
+      console.info("event", data.toString('utf-8'))
+    } catch(err) {
+      console.info("parse event error", err.message)
+    }
+  })
   return {
-    async newAuction(name, minPrice) {
+    async create(name, minPrice) {
       // payload for request
-      const payload = { name, minPrice, userName }
+      const payload = { name, minPrice, userName, eventName:AuctionCommands.createAuction }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')
     
-      const respRaw = await rpc.request(serverPubKey, AuctionCommands.createAuction, payloadRaw)
+      const respRaw = await client.request(AuctionCommands.createAuction, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
       console.info(resp)
       return resp
     },
-    async finalizeAuction(auctionId) {
+    async close(auctionId) {
       // payload for request
-      const payload = { auctionId, userName }
+      const payload = { auctionId, userName, eventName:AuctionCommands.finalizeAuction }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')
     
-      const respRaw = await rpc.request(serverPubKey, AuctionCommands.finalizeAuction, payloadRaw)
+      const respRaw = await client.request(AuctionCommands.finalizeAuction, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
       console.info(resp)
       return resp
     },
-    async newBid(auctionId, amount) {
+    async bid(auctionId, amount) {
       // payload for request
-      const payload = { auctionId, amount, userName }
+      const payload = { auctionId, amount, userName, eventName:AuctionCommands.createBid }
       const payloadRaw = Buffer.from(JSON.stringify(payload), 'utf-8')
     
-      const respRaw = await rpc.request(serverPubKey, AuctionCommands.createBid, payloadRaw)
+      const respRaw = await client.request(AuctionCommands.createBid, payloadRaw)
       const resp = JSON.parse(respRaw.toString('utf-8'))
       console.info(resp)
       return resp
@@ -85,9 +96,9 @@ Please add a name to submit commands
 const docs2 = `
 Type one of the commands:
 
-newAuction {auctioName} {minPrice} 
-newBid {auctionId} {value}
-finalizeAuction {auctionId} 
+create {auctioName} {minPrice} 
+bid {auctionId} {value}
+close {auctionId} 
 `
 let userName = ""
 const userNameDbKey = 'userName1'

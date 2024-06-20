@@ -2,6 +2,7 @@ module.exports = {
   "AuctionCommands" : {
     "createAuction":"createAuction",
     "createBid":"createBid",
-    "finalizeAuction":"finalizeAuction"
+    "finalizeAuction":"finalizeAuction",
+    "sub":"sub"
   }
 }
