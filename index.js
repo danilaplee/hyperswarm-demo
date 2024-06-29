@@ -3,99 +3,21 @@
 const RPC = require("@hyperswarm/rpc");
 const DHT = require("hyperdht");
 const Hypercore = require("hypercore");
-const Hyperbee = require("hyperbee");
 const crypto = require("node:crypto");
-const { AuctionCommands } = require("./constants");
-
-const getBidTopicSubId = (id) => "auction_bids_" + id;
-
+const Hyperswarm = require('hyperswarm')
+const { AuctionCommands, publicDHTDiscoveryKey, serverDbPath } = require("./src/constants");
+const { initClient } = require("./src/client");
+const { createBee, getBidTopicSubId} = require("./src/db");
 const main = async () => {
   // hyperbee db
-  const hcore = new Hypercore("./db/rpc-server");
-  const hbee = new Hyperbee(hcore, {
-    keyEncoding: "utf-8",
-    valueEncoding: "binary",
-  });
-  await hbee.ready();
-
+  const keyPair = DHT.keyPair(Buffer.from(publicDHTDiscoveryKey, "hex"))
+  const hcore = new Hypercore(serverDbPath, keyPair.publicKey, {keyPair});
+  await hcore.ready()
+  const db = await createBee(hcore)
+  const {hbee, auctionDB, bidsDBs, currentPriceNames, currentPrices} = db
   // resolved distributed hash table seed for key pair
-  let dhtSeed = (await hbee.get("dht-seed"))?.value;
-  if (!dhtSeed) {
-    // not found, generate and store in db
-    dhtSeed = crypto.randomBytes(32);
-    await hbee.put("dht-seed", dhtSeed);
-  }
-  //TO-DO REPLICATE THIS ON CLIENT FOR ABSOLUTE PEER2PEER
-  const auctionDB = hbee.sub("auctions");
-  const subscribers = hbee.sub("subscribers");
-  const bidsDBs = {};
-  const subKeys = [];
-  const auctions = [];
-  const indexedAuction = {};
-  const currentPrices = {};
-  const currentPriceNames = {};
-  const auctionsHistoryStream = auctionDB.createHistoryStream();
-  const auctionsLiveStream = auctionDB.createReadStream();
-  const subscribersHistoryStream = subscribers.createHistoryStream();
 
-  const processHistoryBid = (data) => {
-    try {
-      if (data.value) {
-        const item = JSON.parse(data.value.toString("utf-8"));
-        const amount = parseFloat(item.amount);
-        if (
-          !currentPrices[item.auctionId] ||
-          amount > currentPrices[item.auctionId]
-        ) {
-          currentPrices[item.auctionId] = amount;
-          currentPriceNames[item.auctionId] = item.userName;
-        }
-      }
-      // console.info("currentPrices", currentPrices)
-    } catch (err) {
-      // console.error('prcess bid err', err)
-    }
-  };
-
-  const processBidBD = (bidBD) => {
-    const bidsHistoryStream = bidBD.createHistoryStream();
-    bidsHistoryStream.addListener("data", processHistoryBid);
-  };
-
-  const processAuctionStream = (data) => {
-    try {
-      if (data.value) {
-        const item = JSON.parse(data.value.toString("utf-8"));
-        item.id = data.key;
-        if (!item.closed && item.name && !indexedAuction[item.id]) {
-          indexedAuction[item.id] = true;
-          auctions.push(item);
-          bidsDBs[data.key] = hbee.sub(getBidTopicSubId(data.key));
-          processBidBD(bidsDBs[data.key]);
-        }
-        if (item.closed && indexedAuction[item.id]) {
-          auctions.find((i) => {
-            if (i.id === item.id) i.closed = true;
-          });
-        }
-      }
-    } catch (err) {
-      // console.error("parse history error", err)
-    }
-  };
-  auctionsHistoryStream.addListener("data", processAuctionStream);
-  auctionsLiveStream.addListener("data", processAuctionStream);
-  subscribersHistoryStream.addListener("data", (data) => {
-    try {
-      if (data.value) {
-        const item = data.value;
-        subKeys.push(item);
-      }
-    } catch (err) {
-      // console.error("parse subs error", err)
-    }
-  });
-
+  let dhtSeed = crypto.randomBytes(32);
   // start distributed hash table, it is used for rpc service discovery
   const dht = new DHT({
     port: 40001,
@@ -105,36 +27,37 @@ const main = async () => {
   await dht.ready();
 
   // resolve rpc server seed for key pair
-  let rpcSeed = (await hbee.get("rpc-seed"))?.value;
-  if (!rpcSeed) {
-    rpcSeed = crypto.randomBytes(32);
-    await hbee.put("rpc-seed", rpcSeed);
-  }
+  const foundPeers = hcore.findingPeers()
 
-  // setup rpc server
-  const rpc = new RPC({ seed: rpcSeed, dht });
+  let rpcSeed = crypto.randomBytes(32);
+  
+  const swarm = new Hyperswarm({dht})
+  
+  swarm.on('connection', async (socket) => {
+    socket.on('data', data => console.log('client got message:', data.toString("utf-8")))
+    const rep = hcore.replicate(socket)
+  })
+  hcore.on('peer-add', (peer)=>{
+    console.info('new server peer')
+  })
+
+  const discovery = swarm.join(hcore.discoveryKey)
+
+  await discovery.flushed()
+
+
+  // swarm.flush() will wait until *all* discoverable peers have been connected to
+  // It might take a while, so don't await it
+  // Instead, use core.findingPeers() to mark when the discovery process is completed
+  swarm.flush().then(() => foundPeers())
+  // This won't resolve until either
+  //    a) the first peer is found
+  // or b) no peers could be found
+  await hcore.update()
+
+  const rpc = new RPC({ seed: rpcSeed });
   const rpcServer = rpc.createServer();
   await rpcServer.listen();
-  console.log(
-    "rpc server started listening on public key:",
-    rpcServer.publicKey.toString("hex"),
-  );
-  // rpc server started listening on public key: 763cdd329d29dc35326865c4fa9bd33a45fdc2d8d2564b11978ca0d022a44a19
-
-  const updateSubs = (update) => {
-    try {
-      subKeys.map((subKey) => {
-        try {
-          const buff = Buffer.from(subKey, "hex");
-          rpc.event(buff, "event", update);
-        } catch (err) {
-          // console.error('update sub err', err)
-        }
-      });
-    } catch (err) {
-      // console.error('update subs error', err)
-    }
-  };
 
   rpcServer.respond(AuctionCommands.createAuction, async (reqRaw) => {
     try {
@@ -150,9 +73,6 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), "utf-8");
       bidsDBs[id] = hbee.sub(getBidTopicSubId(id));
-      auctions.push({ ...req, id });
-
-      updateSubs(reqRaw);
 
       return respRaw;
     } catch (err) {
@@ -173,9 +93,9 @@ const main = async () => {
 
       if (req.amount && req.auctionId) {
         const amount = parseFloat(req.amount);
-        const auction = JSON.parse(
-          (await auctionDB.get(req.auctionId))?.value?.toString("utf-8"),
-        );
+        const data =  (await auctionDB.get(req.auctionId))?.value?.toString("utf-8")
+        console.info("action data", data)
+        const auction = JSON.parse(data);
         if (auction.closed) throw "auction_closed";
         if (
           amount < auction.minPrice ||
@@ -194,7 +114,6 @@ const main = async () => {
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), "utf-8");
 
-      updateSubs(reqRaw);
       return respRaw;
     } catch (err) {
       console.error("write bid error", err);
@@ -238,13 +157,9 @@ const main = async () => {
         auction,
       };
 
-      auctions.find((i) => {
-        if (i.id === req.auctionId) i.closed = true;
-      });
       // we also need to return buffer response
       const respRaw = Buffer.from(JSON.stringify(resp), "utf-8");
 
-      updateSubs(respRaw);
       return respRaw;
     } catch (err) {
       console.error("finalize auction error", err);
@@ -255,28 +170,7 @@ const main = async () => {
       return respRaw;
     }
   });
-  rpcServer.respond(AuctionCommands.sub, async (reqRaw) => {
-    try {
-      console.info("new sub", reqRaw.toString("utf-8"));
-      subKeys.push(reqRaw.toString("utf-8"));
-      subscribers.put(crypto.randomUUID(), reqRaw);
-    } catch (err) {
-      console.error("finalize auction error", err);
-      const respRaw = Buffer.from(
-        JSON.stringify({ error: err?.message || err }),
-        "utf-8",
-      );
-      return respRaw;
-    }
-  });
-  rpcServer.respond(AuctionCommands.getAuctioData, async () =>
-    Buffer.from(
-      JSON.stringify(
-        auctions.map((i) => ({ ...i, currentPrice: currentPrices[i.id] })),
-      ),
-      "utf-8",
-    ),
-  );
+  initClient(rpcServer.publicKey.toString("hex"), db)
 };
 
 main().catch(console.error);
