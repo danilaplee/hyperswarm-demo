@@ -12,6 +12,7 @@ const { createRpcServer } = require("./src/rpc");
 const { getSeed } = require("./src/utils");
 const args = process.argv;
 const hasMemory = args.includes("--memory")
+const noDHT = args.includes("--no-dht")
 const main = async () => {
   // hyperbee db
   const keyPair = DHT.keyPair(Buffer.from(publicDHTDiscoveryKey, "hex"))
@@ -21,18 +22,24 @@ const main = async () => {
   await hcore.ready()
   const db = await createBee(hcore)
 
-  const dhtSeed = await getSeed("dht-seed", privatebee)
 
   // start distributed hash table, it is used for rpc service discovery
-  const dht = new DHT({
-    port: 40001,
-    keyPair: DHT.keyPair(dhtSeed),
-    bootstrap: [{ host: "127.0.0.1", port: 30001 }], // note boostrap points to dht that is started via cli
-  });
-  await dht.ready();
-  const foundPeers = hcore.findingPeers()
+  let swarm;
+  if(noDHT) {
+    swarm = new Hyperswarm()
+  } else {
+    const dhtSeed = await getSeed("dht-seed", privatebee)
+    const dht = new DHT({
+      port: 40001,
+      keyPair: DHT.keyPair(dhtSeed),
+      bootstrap: [{ host: "127.0.0.1", port: 30001 }], // note boostrap points to dht that is started via cli
+    });
+    await dht.ready();
   
-  const swarm = new Hyperswarm({dht})
+    swarm = new Hyperswarm({dht})
+  }
+
+  const foundPeers = hcore.findingPeers()
   
   swarm.on('connection', async (socket) => {
     db.auctionDB.replicate(socket)

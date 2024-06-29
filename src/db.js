@@ -20,7 +20,11 @@ const createBee = async (hcore) => {
   const auctionLiveStream = auctionDB.createHistoryStream({live:true})
 
   const getAuctioData = ()=>auctions.map((i) => ({ ...i, currentPrice: currentPrices[i.id] }))
-
+  let drawTimeout = null;
+  const drawTable = () => {
+    clearTimeout(drawTimeout)
+    drawTimeout = setTimeout(()=>drawAuctionTable(getAuctioData()), 300)
+  }
   const processHistoryBid = (data) => {
     try {
       if (data.value) {
@@ -33,8 +37,8 @@ const createBee = async (hcore) => {
           currentPrices[item.auctionId] = amount;
           currentPriceNames[item.auctionId] = item.userName;
         }
+        drawTable()
       }
-      drawAuctionTable(getAuctioData())
       // console.info("currentPrices", currentPrices)
     } catch (err) {
       // console.error('prcess bid err', err)
@@ -61,7 +65,7 @@ const createBee = async (hcore) => {
             }
           });
         }
-        drawAuctionTable(getAuctioData())
+        drawTable()
       }
     } catch (err) {
       // console.error("parse auction error", err)
