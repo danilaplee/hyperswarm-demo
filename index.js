@@ -8,37 +8,30 @@ const Hyperswarm = require('hyperswarm')
 const { AuctionCommands, publicDHTDiscoveryKey, serverDbPath } = require("./src/constants");
 const { initClient } = require("./src/client");
 const { createBee, getBidTopicSubId} = require("./src/db");
+const Hyperbee = require("hyperbee");
+const { getSeed } = require("./src/utils");
+
 const main = async () => {
   // hyperbee db
   const keyPair = DHT.keyPair(Buffer.from(publicDHTDiscoveryKey, "hex"))
-  const hcore = new Hypercore(serverDbPath, keyPair.publicKey, {keyPair});
+  const privatecore = new Hypercore(serverDbPath+"_private")
+  const privatebee = new Hyperbee(privatecore)
+  const hcore = new Hypercore(serverDbPath+"_public", keyPair.publicKey, {keyPair});
   await hcore.ready()
   const db = await createBee(hcore)
   const {hbee, auctionDB, bidsDBs, currentPriceNames, currentPrices} = db
-  // resolved distributed hash table seed for key pair
 
-  let dhtSeed = crypto.randomBytes(32);
-  // start distributed hash table, it is used for rpc service discovery
-  const dht = new DHT({
-    port: 40001,
-    keyPair: DHT.keyPair(dhtSeed),
-    bootstrap: [{ host: "127.0.0.1", port: 30001 }], // note boostrap points to dht that is started via cli
-  });
-  await dht.ready();
+  const rpcSeed = await getSeed("peer-seed", privatebee) 
+
 
   // resolve rpc server seed for key pair
   const foundPeers = hcore.findingPeers()
 
-  let rpcSeed = crypto.randomBytes(32);
   
-  const swarm = new Hyperswarm({dht})
+  const swarm = new Hyperswarm()
   
   swarm.on('connection', async (socket) => {
-    socket.on('data', data => console.log('client got message:', data.toString("utf-8")))
-    const rep = hcore.replicate(socket)
-  })
-  hcore.on('peer-add', (peer)=>{
-    console.info('new server peer')
+    auctionDB.replicate(socket)
   })
 
   const discovery = swarm.join(hcore.discoveryKey)
@@ -170,7 +163,7 @@ const main = async () => {
       return respRaw;
     }
   });
-  initClient(rpcServer.publicKey.toString("hex"), db)
+  initClient(rpcServer.publicKey.toString("hex"), {...db, hbee:privatebee})
 };
 
 main().catch(console.error);

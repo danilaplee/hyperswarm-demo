@@ -19,6 +19,6 @@ create {auctioName} {minPrice}
 bid {auctionId} {value}
 close {auctionId} 
 `,
-  serverDbPath:"./db2/rpc-server",
+  serverDbPath:"./db/rpc-server",
   publicDHTDiscoveryKey:"480f3d2a8e6b1cf5b18db210921edf502ccfc724e091d51aa2fabe1881ed3935"
 };

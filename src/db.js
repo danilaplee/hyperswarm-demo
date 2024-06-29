@@ -61,13 +61,12 @@ const createBee = async (hcore) => {
         drawAuctionTable(getAuctioData())
       }
     } catch (err) {
-      console.error("parse auction error", err)
-      console.info(data, data?.value?.toString("utf-8"))
+      // console.error("parse auction error", err)
+      // console.info(data, data?.value?.toString("utf-8"))
     }
   };
   bidHistoryStream.addListener("data", data=>processHistoryBid(data))
   liveStream.addListener("data", (data)=>{
-    console.info('live stream', data)
     processHistoryBid(data)
   });
   auctionLiveStream.addListener("data", (data)=>{
