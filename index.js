@@ -32,10 +32,9 @@ const main = async () => {
   await dht.ready();
   const foundPeers = hcore.findingPeers()
   
-  const swarm = new Hyperswarm()
+  const swarm = new Hyperswarm({dht})
   
   swarm.on('connection', async (socket) => {
-    console.info('connection')
     db.auctionDB.replicate(socket)
   })
 
