@@ -88,10 +88,16 @@ const createRpcServer = async (db, privatebee) => {
         auction = JSON.parse(
           (await auctionDB.get(req.auctionId))?.value?.toString("utf-8"),
         );
-        //TO-DO VALIDATE HERE WITH PUB-PRIV-KEY SIGNATURE
-        //AND NOT WITH USERNAME
-        if (req.userName !== auction.userName) throw "only_owner_can_finalize";
-
+        const authorPublicKey = crypto.createPublicKey({key:auction.publicKey, format:"jwk"})
+        const signedPayload = Buffer.from(JSON.stringify({
+          auctionId: req.auctionId,
+          userName: req.userName,
+          eventName: req.eventName
+        }), "utf-8")
+        const isSignatureValid = crypto.verify("SHA-256", signedPayload, authorPublicKey, Buffer.from(req.signature, "hex"))
+        if(!isSignatureValid) {
+          throw "signature_not_valid"
+        }
         if (auction.closed) throw "auction_closed";
         auction.winnerName = winnerName
         auction.closed = true;

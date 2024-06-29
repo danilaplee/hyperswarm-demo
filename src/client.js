@@ -5,6 +5,7 @@ const Table = require("cli-table3");
 const { AuctionCommands, docs, docs2, publicDHTDiscoveryKey, clientDbPath} = require("./constants");
 const readline = require("node:readline");
 const { stdin: input, stdout: output } = require("node:process");
+const { getRsaKeys, signData } = require("./utils");
 const rl = readline.createInterface({ input, output });
 
 const userNameDbKey = "userName1";
@@ -13,9 +14,9 @@ let serverPubKey;
 let api
 let userName = "";
 const main = async (db) => {
-  // rpc lib
-  const rpc = new RPC();
 
+  const rpc = new RPC();
+  const {privateKey, publicKeyJWK} = await getRsaKeys(db)
   const client = rpc.connect(serverPubKey);
   return {
     async create(...args) {
@@ -27,7 +28,6 @@ const main = async (db) => {
         minPrice = args[argIndex++];
       }
       name = name.join(" ").replace(minPrice, "");
-      // console.info('name', name)
       if (!name || typeof name !== "string" || name === "") {
         console.error("invalid name");
         return;
@@ -36,21 +36,22 @@ const main = async (db) => {
         console.error("invalid minimum price");
         return;
       }
-      // payload for request
       const payload = {
         name,
         minPrice,
         userName,
         eventName: AuctionCommands.createAuction,
       };
-      const payloadRaw = Buffer.from(JSON.stringify(payload), "utf-8");
+      const payloadRaw = JSON.stringify(payload)
+      payload.signature = await signData(payloadRaw, privateKey)
+      payload.publicKey = publicKeyJWK
+      const payloadRaw2 = Buffer.from(JSON.stringify(payload), "utf-8");
 
       const respRaw = await client.request(
         AuctionCommands.createAuction,
-        payloadRaw,
+        payloadRaw2,
       );
       const resp = JSON.parse(respRaw.toString("utf-8"));
-      // console.info(resp);
       if (resp?.error) {
         console.error(resp?.error);
       }
@@ -61,12 +62,12 @@ const main = async (db) => {
         console.error("invalid auctionId");
         return;
       }
-      // payload for request
       const payload = {
         auctionId,
         userName,
         eventName: AuctionCommands.finalizeAuction,
       };
+      payload.signature = await signData(JSON.stringify(payload), privateKey)
       const payloadRaw = Buffer.from(JSON.stringify(payload), "utf-8");
 
       const respRaw = await client.request(
@@ -88,13 +89,13 @@ const main = async (db) => {
         console.error("invalid value");
         return;
       }
-      // payload for request
       const payload = {
         auctionId,
         amount,
         userName,
         eventName: AuctionCommands.createBid,
       };
+      payload.signature = await signData(JSON.stringify(payload), privateKey)
       const payloadRaw = Buffer.from(JSON.stringify(payload), "utf-8");
 
       const respRaw = await client.request(
@@ -108,8 +109,6 @@ const main = async (db) => {
       return resp;
     },
     async getAuctionData() {
-      // const respRaw = await client.request(AuctionCommands.getAuctioData);
-      // return JSON.parse(respRaw.toString("utf-8"));
       return await db.getAuctioData()
     },
     hbee:db.hbee

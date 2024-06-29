@@ -6,6 +6,7 @@
 - npm start
 - open another terminal
 - npm run memory
+- you can also use the optional flag --no-dht to connect to the global one
 - run some commands
 - enjoy
 
