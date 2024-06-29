@@ -2,7 +2,7 @@
 - npm i
 - npm start
 - open another terminal
-- npm run start-memory
+- npm run memory
 - run some commands
 - enjoy
 
