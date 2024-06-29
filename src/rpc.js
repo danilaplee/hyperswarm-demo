@@ -47,7 +47,6 @@ const createRpcServer = async (db, privatebee) => {
       if (req.amount && req.auctionId) {
         const amount = parseFloat(req.amount);
         const data =  (await auctionDB.get(req.auctionId))?.value?.toString("utf-8")
-        console.info("action data", data)
         const auction = JSON.parse(data);
         if (auction.closed) throw "auction_closed";
         if (
@@ -84,17 +83,17 @@ const createRpcServer = async (db, privatebee) => {
       console.info("close auction", req);
       let auction;
 
+      const winnerName = currentPriceNames[req.auctionId]
       if (req.auctionId) {
         auction = JSON.parse(
           (await auctionDB.get(req.auctionId))?.value?.toString("utf-8"),
         );
-
         //TO-DO VALIDATE HERE WITH PUB-PRIV-KEY SIGNATURE
         //AND NOT WITH USERNAME
         if (req.userName !== auction.userName) throw "only_owner_can_finalize";
 
         if (auction.closed) throw "auction_closed";
-
+        auction.winnerName = winnerName
         auction.closed = true;
         await auctionDB.put(
           req.auctionId,
@@ -104,7 +103,7 @@ const createRpcServer = async (db, privatebee) => {
 
       const resp = {
         success: true,
-        winnerName: currentPriceNames[req.auctionId],
+        winnerName,
         winnerPrice: currentPrices[req.auctionId],
         req,
         auction,

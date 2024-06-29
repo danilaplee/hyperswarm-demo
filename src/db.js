@@ -55,7 +55,10 @@ const createBee = async (hcore) => {
         }
         if (item.closed && indexedAuction[item.id]) {
           auctions.find((i) => {
-            if (i.id === item.id) i.closed = true;
+            if (i.id === item.id) {
+              i.closed = true;
+              i.winnerName = item.winnerName
+            }
           });
         }
         drawAuctionTable(getAuctioData())

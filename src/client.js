@@ -50,7 +50,7 @@ const main = async (db) => {
         payloadRaw,
       );
       const resp = JSON.parse(respRaw.toString("utf-8"));
-      console.info(resp);
+      // console.info(resp);
       if (resp?.error) {
         console.error(resp?.error);
       }
@@ -127,7 +127,7 @@ const execCommand = async (answer) => {
   const args = answer.split(" ");
   const name = args.shift();
   if (!api[name]) {
-    console.info("incorrect command");
+    console.error("incorrect command");
   } else {
     api[name](...args);
   }
@@ -135,19 +135,19 @@ const execCommand = async (answer) => {
 
 const drawAuctionTable = async (auctionData) => {
   try {
-    console.info("");
+    console.info("\n \n");
     const auctionMap = auctionData
       ?.map((a) =>
         a.name
-          ? [a.name, a.id, a.currentPrice || a.minPrice, a.closed]
+          ? [a.name, a.id, a.currentPrice || a.minPrice, a.closed ? "Closed" : "Ongoing", a.userName, a.winnerName]
           : undefined,
       )
       .filter((i) => i)
       .sort((a, b) => a.name - b.name);
     // console.info('auctions', auctionData, auctionMap)
     const table = new Table({
-      head: ["Auction Name", "Auction Id", "Price", "Finished"],
-      colWidths: [30, 40, 20],
+      head: ["Auction Name", "Auction Id", "Price", "Status", "Author Name", "Winner"],
+      colWidths: [20, 40, 15, 20, 20, 20],
 
       // rows
     });
