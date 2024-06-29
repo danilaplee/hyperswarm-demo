@@ -10,13 +10,15 @@ const { initClient } = require("./src/client");
 const { createBee, getBidTopicSubId} = require("./src/db");
 const Hyperbee = require("hyperbee");
 const { getSeed } = require("./src/utils");
-
+const RAM = require("random-access-memory");
+const args = process.argv;
+const hasMemory = args.includes("--memory")
 const main = async () => {
   // hyperbee db
   const keyPair = DHT.keyPair(Buffer.from(publicDHTDiscoveryKey, "hex"))
-  const privatecore = new Hypercore(serverDbPath+"_private")
+  const privatecore = new Hypercore(hasMemory ? RAM : serverDbPath+"_private")
   const privatebee = new Hyperbee(privatecore)
-  const hcore = new Hypercore(serverDbPath+"_public", keyPair.publicKey, {keyPair});
+  const hcore = new Hypercore(hasMemory ? RAM : serverDbPath+"_public", keyPair.publicKey, {keyPair});
   await hcore.ready()
   const db = await createBee(hcore)
   const {hbee, auctionDB, bidsDBs, currentPriceNames, currentPrices} = db
